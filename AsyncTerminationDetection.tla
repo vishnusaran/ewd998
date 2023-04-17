@@ -24,6 +24,8 @@ CONSTANT N
  \* * upon startup.
 ASSUME NIsPosNat == N \in Nat \ {0}
 
+
+
 \* TODO Fire up the TLA+ repl (`tlcrepl` in the Terminal > New Terminal) and 
  \* TODO find out what TLC returns for the following expressions:
  \* TODO 23 = "frob"
@@ -42,6 +44,86 @@ ASSUME NIsPosNat == N \in Nat \ {0}
  \* TODO 23 \notin {23} \ {23}
  \* TODO 10 \in 1..10
  \* TODO 1 \in 1..0
+
+ Node == 0 .. N-1
+ 
+ VARIABLE active, network, terminationDetected
+
+ vars == <<active, network, terminationDetected>>
+
+ terminated ==
+     \A n \in Node: 
+        /\ active[n] = FALSE 
+        /\ network[n] = 0
+
+ TypeOk ==
+     /\ active \in [Node -> BOOLEAN ]
+     /\ network \in [Node -> Nat]
+     /\ terminationDetected \in BOOLEAN  
+
+ Init == 
+     /\ active \in [Node -> BOOLEAN ]
+     /\ network \in [Node -> 0..3]
+     /\ terminationDetected \in {FALSE, terminated}
+
+
+ Terminates(n) == 
+    \*  this is the current state 
+    \* this is the next state. Its denoted as prime'. Only single prime is allowed
+    \* the current state is true, the next state can be false or true
+    \* conjuction/disjuctions order doesnot matter.
+     /\ active[n] = TRUE
+     /\ network' = network
+     /\ active' = [m \in Node |-> IF m = n THEN FALSE ELSE active[m]]
+    \*  this the same as line 58
+     /\ active' = [active EXCEPT ![n] = FALSE]
+     /\ terminationDetected' \in {terminated', terminationDetected}
+
+
+ SendMsg(snd, rcv) == 
+     /\ UNCHANGED active
+     /\ active[snd] = TRUE
+     /\ network' = [network EXCEPT ![rcv] = @ + 1 ]
+     /\ UNCHANGED terminationDetected
+
+ RecvMsg(rcv) == TRUE
+    /\ network[rcv] > 0
+    /\ active' = [m \in Node |-> IF m = rcv THEN TRUE ELSE active[m]]
+    \* /\ network' = [m \in Node |-> IF m = rcv THEN network[rcv] -1 ELSE network[m]]
+    \* this is the same as line 68
+    \* /\ network' = [network EXCEPT ![rcv] = network[rcv] -1]
+    \* this is same as line 70 and 68
+    /\ network' = [network EXCEPT ![rcv] = @ -1]
+    /\ UNCHANGED terminationDetected
+    
+ Next == 
+     \E n,m \in Node:
+        \/ Terminates(n)
+        \/ RecvMsg(n)
+        \/ SendMsg(n,m)
+
+        \* [A]_v <=> A \/ UNCHANGED v
+
+ Spec ==
+        Init /\ [][Next]_vars
+    
+ NeverUndetect ==
+     [][terminationDetected => terminated']_vars
+
+ Safe ==
+     [](terminationDetected => terminated)
+
+ Live ==
+     [](terminated => <>terminationDetected)
+
+THEOREM 
+    Spec => Safe /\ NeverUndetect /\ Live
+
+Constraint ==
+    \A n \in Node: network[n] < 2
+
+
+ 
 
 =============================================================================
 \* Modification History
